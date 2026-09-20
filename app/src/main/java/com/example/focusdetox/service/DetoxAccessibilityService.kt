@@ -31,14 +31,13 @@ class DetoxAccessibilityService : AccessibilityService() {
         }
     }
 
-    // Session Timer State
     private var currentActivePackage: String? = null
     private var sessionStartTime = 0L
     private val handler = Handler(Looper.getMainLooper())
     private val sessionCheckRunnable = object : Runnable {
         override fun run() {
             checkActiveSession()
-            handler.postDelayed(this, 10000) // Check every 10 seconds
+            handler.postDelayed(this, 10000)
         }
     }
 
@@ -60,21 +59,30 @@ class DetoxAccessibilityService : AccessibilityService() {
         val eventType = event?.eventType ?: return
         val packageName = event.packageName?.toString() ?: return
 
+        val currentTime = System.currentTimeMillis()
+        val lockUntil = activeSettings.appLockUntilMap[packageName] ?: 0L
+        val isTemporarilyLocked = currentTime < lockUntil
+        val isPermanentlyBlocked = activeSettings.blockedPackages.contains(packageName)
+
+        // Exit fast if app is neither permanently blocked nor temporarily locked
+        if (!isPermanentlyBlocked && !isTemporarilyLocked) return
+
         if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            if (activeSettings.blockedPackages.contains(packageName)) {
-                if (activeSettings.isAppLockEnabled) {
-                    triggerAppBlock(packageName, "App is locked")
-                    return
+            if (activeSettings.isAppLockEnabled) {
+                val reason = if (isTemporarilyLocked) {
+                    val remainingMins = ((lockUntil - currentTime) / 60000L) + 1
+                    "Detox timer active ($remainingMins mins left)"
+                } else {
+                    "App is locked"
                 }
 
-                // Start tracking active session duration
-                if (currentActivePackage != packageName) {
-                    currentActivePackage = packageName
-                    sessionStartTime = System.currentTimeMillis()
-                }
-            } else {
-                // User left blocked apps -> reset session
-                currentActivePackage = null
+                triggerAppBlock(packageName, reason)
+                return
+            }
+
+            if (currentActivePackage != packageName) {
+                currentActivePackage = packageName
+                sessionStartTime = System.currentTimeMillis()
             }
         }
     }
@@ -86,11 +94,12 @@ class DetoxAccessibilityService : AccessibilityService() {
         val elapsedMinutes = (System.currentTimeMillis() - sessionStartTime) / 60000L
         if (elapsedMinutes >= activeSettings.maxSessionMinutes) {
             currentActivePackage = null
-            triggerAppBlock(pkg, "Session time limit of ${activeSettings.maxSessionMinutes} mins reached")
+            triggerAppBlock(pkg, "Session limit of ${activeSettings.maxSessionMinutes} mins reached")
         }
     }
 
     private fun triggerAppBlock(packageName: String, reason: String) {
+        performGlobalAction(GLOBAL_ACTION_BACK) // Closes active PiP or popup overlays
         startActivity(homeIntent)
         if (activeSettings.isNotificationEnabled) {
             notificationHelper.sendBlockedNotification(packageName, reason)

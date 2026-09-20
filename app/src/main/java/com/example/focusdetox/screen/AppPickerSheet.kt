@@ -1,9 +1,11 @@
 package com.example.focusdetox.screen
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
@@ -11,6 +13,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -19,6 +23,12 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.example.focusdetox.data.AppInfo
 import com.example.focusdetox.data.AppListProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
+
+// Global thread-safe memory cache
+private val iconCache = ConcurrentHashMap<String, ImageBitmap>()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,11 +47,14 @@ fun AppPickerBottomSheet(
         isLoading = false
     }
 
-    val filteredApps = remember(searchQuery, installedApps) {
-        if (searchQuery.isBlank()) {
-            installedApps
-        } else {
-            installedApps.filter { it.name.contains(searchQuery, ignoreCase = true) }
+    val filteredApps by remember {
+        derivedStateOf {
+            val query = searchQuery.trim()
+            if (query.isBlank()) {
+                installedApps
+            } else {
+                installedApps.filter { it.name.contains(query, ignoreCase = true) }
+            }
         }
     }
 
@@ -85,7 +98,11 @@ fun AppPickerBottomSheet(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(filteredApps, key = { it.packageName }) { app ->
+                    items(
+                        items = filteredApps,
+                        key = { it.packageName },
+                        contentType = { "app_row" }
+                    ) { app ->
                         AppPickerRow(
                             app = app,
                             isBlocked = blockedPackages.contains(app.packageName),
@@ -112,19 +129,10 @@ private fun AppPickerRow(
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val iconBitmap = remember(app.icon) {
-            app.icon?.toBitmap(width = 88, height = 88)?.asImageBitmap()
-        }
-
-        if (iconBitmap != null) {
-            Image(
-                bitmap = iconBitmap,
-                contentDescription = app.name,
-                modifier = Modifier.size(40.dp)
-            )
-        } else {
-            Box(modifier = Modifier.size(40.dp))
-        }
+        AsyncAppIcon(
+            packageName = app.packageName,
+            modifier = Modifier.size(40.dp)
+        )
 
         Spacer(modifier = Modifier.width(16.dp))
 
@@ -138,6 +146,44 @@ private fun AppPickerRow(
         Switch(
             checked = isBlocked,
             onCheckedChange = onToggle
+        )
+    }
+}
+
+@Composable
+fun AsyncAppIcon(packageName: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+
+    // Check cache instantly on main thread before launching any coroutines
+    var iconBitmap by remember(packageName) { mutableStateOf(iconCache[packageName]) }
+
+    if (iconBitmap == null) {
+        LaunchedEffect(packageName) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val drawable = context.packageManager.getApplicationIcon(packageName)
+                    // Smaller 64x64 bitmap footprint reduces RAM usage during fast fling
+                    val bitmap = drawable.toBitmap(width = 64, height = 64).asImageBitmap()
+                    iconCache[packageName] = bitmap
+                    iconBitmap = bitmap
+                } catch (_: Exception) {
+                    // Fallback to placeholder UI on error
+                }
+            }
+        }
+    }
+
+    if (iconBitmap != null) {
+        Image(
+            bitmap = iconBitmap!!,
+            contentDescription = null,
+            modifier = modifier
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
         )
     }
 }

@@ -9,11 +9,11 @@ import android.text.TextUtils
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,14 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.focusdetox.data.AppInfo
@@ -45,17 +42,21 @@ import com.example.focusdetox.data.DetoxSettings
 import com.example.focusdetox.data.DetoxSettingsRepository
 import com.example.focusdetox.service.DetoxAccessibilityService
 import com.example.focusdetox.screen.AppPickerBottomSheet
+import com.example.focusdetox.screen.AsyncAppIcon
 import com.example.focusdetox.ui.theme.WAHIcons
 import com.example.focusdetox.ui.theme.delete
+import com.example.focusdetox.ui.theme.hourglass
 import com.example.focusdetox.ui.theme.notifications_active
 import com.example.focusdetox.ui.theme.shield
 import com.example.focusdetox.ui.theme.shield_moon
+import com.example.focusdetox.ui.theme.timer
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
@@ -88,12 +89,20 @@ fun DetoxControlCenter() {
     var isServiceEnabled by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
     var showDisclosureDialog by remember { mutableStateOf(false) }
     var showAppPickerSheet by remember { mutableStateOf(false) }
+    var selectedAppForTimer by remember { mutableStateOf<AppInfo?>(null) }
 
-    var blockedAppInfos by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
+    var allApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
 
-    LaunchedEffect(settings.blockedPackages) {
-        val installed = AppListProvider.getInstalledLauncherApps(context)
-        blockedAppInfos = installed.filter { settings.blockedPackages.contains(it.packageName) }
+    LaunchedEffect(Unit) {
+        allApps = AppListProvider.getInstalledLauncherApps(context)
+    }
+
+    // Merge permanently blocked apps and temporarily timed apps
+    val protectedAppInfos by remember(settings.blockedPackages, settings.appLockUntilMap, allApps) {
+        derivedStateOf {
+            val allPackages = settings.blockedPackages + settings.appLockUntilMap.keys
+            allApps.filter { allPackages.contains(it.packageName) }
+        }
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -220,7 +229,7 @@ fun DetoxControlCenter() {
                         )
 
                         ModernToggleRow(
-                            icon = Icons.Default.Lock,
+                            icon = WAHIcons.timer,
                             title = "Session Time Limit",
                             subtitle = "Lock apps after continuous usage time",
                             checked = settings.isSessionTimerEnabled,
@@ -243,7 +252,6 @@ fun DetoxControlCenter() {
                 }
             }
 
-            // Lag-Free Session Duration Slider
             item {
                 AnimatedVisibility(
                     visible = settings.isSessionTimerEnabled,
@@ -266,7 +274,6 @@ fun DetoxControlCenter() {
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Local state slider prevents stutter/lag during dragging
                             var sliderPosition by remember(settings.maxSessionMinutes) {
                                 mutableStateOf(settings.maxSessionMinutes.toFloat())
                             }
@@ -302,7 +309,7 @@ fun DetoxControlCenter() {
                 }
             }
 
-            if (blockedAppInfos.isEmpty()) {
+            if (protectedAppInfos.isEmpty()) {
                 item {
                     Card(
                         shape = RoundedCornerShape(16.dp),
@@ -310,7 +317,7 @@ fun DetoxControlCenter() {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "No apps selected. Tap 'Manage Apps' to add YouTube, Instagram, or TikTok.",
+                            text = "No apps selected yet. Tap 'Manage Apps' to pick Instagram, YouTube, or TikTok.",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(20.dp)
@@ -318,45 +325,73 @@ fun DetoxControlCenter() {
                     }
                 }
             } else {
-                items(blockedAppInfos, key = { it.packageName }) { app ->
+                items(protectedAppInfos, key = { it.packageName }) { app ->
+                    val lockUntil = settings.appLockUntilMap[app.packageName] ?: 0L
+                    val currentTime = System.currentTimeMillis()
+                    val isTemporarilyLocked = currentTime < lockUntil
+
                     Card(
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(12.dp)
-                                .fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val iconBitmap = remember(app.icon) {
-                                app.icon?.toBitmap(width = 80, height = 80)?.asImageBitmap()
-                            }
-                            if (iconBitmap != null) {
-                                Image(
-                                    bitmap = iconBitmap,
-                                    contentDescription = app.name,
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                AsyncAppIcon(
+                                    packageName = app.packageName,
                                     modifier = Modifier.size(36.dp)
                                 )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = app.name,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = {
-                                    scope.launch { repository.togglePackageBlocked(app.packageName, false) }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = app.name,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+
+                                    if (isTemporarilyLocked) {
+                                        val remainingMins = ((lockUntil - currentTime) / 60000L) + 1
+                                        val hours = remainingMins / 60
+                                        val mins = remainingMins % 60
+                                        val timeStr = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
+
+                                        Text(
+                                            text = "Paused for $timeStr remaining",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
-                            ) {
-                                Icon(
-                                    WAHIcons.delete,
-                                    contentDescription = "Remove",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
+
+
+                                IconButton(onClick = { selectedAppForTimer = app }) {
+                                    Icon(
+                                        imageVector = WAHIcons.hourglass,
+                                        contentDescription = "Set Timer",
+                                        tint = if (isTemporarilyLocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            repository.togglePackageBlocked(app.packageName, false)
+                                            repository.removeTemporaryAppLock(app.packageName)
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        WAHIcons.delete,
+                                        contentDescription = "Remove",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
                         }
                     }
@@ -365,6 +400,60 @@ fun DetoxControlCenter() {
 
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
+    }
+
+    // Detox Timer Duration Selection Dialog
+    selectedAppForTimer?.let { app ->
+        AlertDialog(
+            onDismissRequest = { selectedAppForTimer = null },
+            title = { Text("Pause ${app.name}", fontWeight = FontWeight.Bold) },
+            text = { Text("Select how long you want to lock yourself out of ${app.name}:") },
+            confirmButton = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val durations = listOf(
+                        "30 Minutes" to 30,
+                        "1 Hour" to 60,
+                        "2 Hours" to 120,
+                        "4 Hours" to 240,
+                        "8 Hours" to 480
+                    )
+
+                    durations.forEach { (label, minutes) ->
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    repository.setTemporaryAppLock(app.packageName, minutes)
+                                    selectedAppForTimer = null
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Lock for $label")
+                        }
+                    }
+
+                    if (settings.appLockUntilMap.containsKey(app.packageName)) {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    repository.removeTemporaryAppLock(app.packageName)
+                                    selectedAppForTimer = null
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Cancel Active Timer", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedAppForTimer = null }) { Text("Close") }
+            }
+        )
     }
 
     if (showAppPickerSheet) {

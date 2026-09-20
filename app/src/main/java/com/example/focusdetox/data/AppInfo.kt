@@ -1,18 +1,15 @@
 package com.example.focusdetox.data
 
-
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.drawable.Drawable
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 data class AppInfo(
     val name: String,
-    val packageName: String,
-    val icon: Drawable?
+    val packageName: String
 )
 
 object AppListProvider {
@@ -33,13 +30,11 @@ object AppListProvider {
         resolveInfos
             .mapNotNull { resolveInfo ->
                 val pkgName = resolveInfo.activityInfo.packageName
-                // Exclude self from the block list
                 if (pkgName == context.packageName) return@mapNotNull null
 
                 AppInfo(
                     name = resolveInfo.loadLabel(pm).toString(),
-                    packageName = pkgName,
-                    icon = resolveInfo.loadIcon(pm)
+                    packageName = pkgName
                 )
             }
             .distinctBy { it.packageName }

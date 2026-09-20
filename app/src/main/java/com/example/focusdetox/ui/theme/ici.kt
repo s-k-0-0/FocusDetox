@@ -410,3 +410,161 @@ public val WAHIcons.delete: ImageVector
 
 private var _delete: ImageVector? = null
 
+@Suppress("CheckReturnValue")
+public val WAHIcons.timer: ImageVector
+    get() {
+        if (_timer != null) {
+            return _timer!!
+        }
+        _timer =
+            ImageVector.Builder(
+                name = "timer",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f,
+            )
+                .apply {
+                    path(
+                        fill = SolidColor(Color.Black),
+                        fillAlpha = 1f,
+                        stroke = null,
+                        strokeAlpha = 1f,
+                        strokeLineWidth = 1f,
+                        strokeLineCap = StrokeCap.Butt,
+                        strokeLineJoin = StrokeJoin.Bevel,
+                        strokeLineMiter = 1f,
+                        pathFillType = PathFillType.Companion.NonZero,
+                    ) {
+                        moveTo(9f, 3f)
+                        verticalLineTo(1f)
+                        horizontalLineToRelative(6f)
+                        verticalLineTo(3f)
+                        horizontalLineTo(9f)
+                        close()
+                        moveToRelative(2f, 11f)
+                        horizontalLineToRelative(2f)
+                        verticalLineTo(8f)
+                        horizontalLineTo(11f)
+                        verticalLineToRelative(6f)
+                        close()
+                        moveTo(8.51f, 21.29f)
+                        quadTo(6.88f, 20.58f, 5.65f, 19.35f)
+                        reflectiveQuadTo(3.71f, 16.49f)
+                        reflectiveQuadTo(3f, 13f)
+                        reflectiveQuadTo(3.71f, 9.51f)
+                        reflectiveQuadTo(5.65f, 6.65f)
+                        quadTo(6.88f, 5.43f, 8.51f, 4.71f)
+                        reflectiveQuadTo(12f, 4f)
+                        quadToRelative(1.55f, 0f, 2.98f, 0.5f)
+                        reflectiveQuadToRelative(2.68f, 1.45f)
+                        lineToRelative(1.4f, -1.4f)
+                        lineToRelative(1.4f, 1.4f)
+                        lineToRelative(-1.4f, 1.4f)
+                        quadTo(20f, 8.6f, 20.5f, 10.02f)
+                        reflectiveQuadTo(21f, 13f)
+                        quadToRelative(0f, 1.85f, -0.71f, 3.49f)
+                        reflectiveQuadToRelative(-1.94f, 2.86f)
+                        reflectiveQuadToRelative(-2.86f, 1.94f)
+                        reflectiveQuadTo(12f, 22f)
+                        reflectiveQuadTo(8.51f, 21.29f)
+                        close()
+                        moveToRelative(8.44f, -3.34f)
+                        quadTo(19f, 15.9f, 19f, 13f)
+                        reflectiveQuadTo(16.95f, 8.05f)
+                        reflectiveQuadTo(12f, 6f)
+                        reflectiveQuadTo(7.05f, 8.05f)
+                        reflectiveQuadTo(5f, 13f)
+                        reflectiveQuadToRelative(2.05f, 4.95f)
+                        reflectiveQuadTo(12f, 20f)
+                        reflectiveQuadToRelative(4.95f, -2.05f)
+                        close()
+                        moveTo(12f, 13f)
+                        close()
+                    }
+                }
+                .build()
+        return _timer!!
+    }
+
+private var _timer: ImageVector? = null
+
+@Suppress("CheckReturnValue")
+public val WAHIcons.hourglass: ImageVector
+    get() {
+        if (_hourglass != null) {
+            return _hourglass!!
+        }
+        _hourglass =
+            ImageVector.Builder(
+                name = "hourglass",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f,
+            )
+                .apply {
+                    path(
+                        fill = SolidColor(Color.Black),
+                        fillAlpha = 1f,
+                        stroke = null,
+                        strokeAlpha = 1f,
+                        strokeLineWidth = 1f,
+                        strokeLineCap = StrokeCap.Butt,
+                        strokeLineJoin = StrokeJoin.Bevel,
+                        strokeLineMiter = 1f,
+                        pathFillType = PathFillType.Companion.NonZero,
+                    ) {
+                        moveTo(8f, 20f)
+                        horizontalLineToRelative(8f)
+                        verticalLineTo(17f)
+                        quadToRelative(0f, -1.65f, -1.17f, -2.83f)
+                        reflectiveQuadTo(12f, 13f)
+                        reflectiveQuadTo(9.18f, 14.18f)
+                        reflectiveQuadTo(8f, 17f)
+                        verticalLineToRelative(3f)
+                        close()
+                        moveTo(14.83f, 9.82f)
+                        quadTo(16f, 8.65f, 16f, 7f)
+                        verticalLineTo(4f)
+                        horizontalLineTo(8f)
+                        verticalLineTo(7f)
+                        quadTo(8f, 8.65f, 9.18f, 9.82f)
+                        reflectiveQuadTo(12f, 11f)
+                        reflectiveQuadTo(14.83f, 9.82f)
+                        close()
+                        moveTo(4f, 22f)
+                        verticalLineTo(20f)
+                        horizontalLineTo(6f)
+                        verticalLineTo(17f)
+                        quadTo(6f, 15.48f, 6.71f, 14.14f)
+                        reflectiveQuadTo(8.7f, 12f)
+                        quadTo(7.43f, 11.2f, 6.71f, 9.86f)
+                        reflectiveQuadTo(6f, 7f)
+                        verticalLineTo(4f)
+                        horizontalLineTo(4f)
+                        verticalLineTo(2f)
+                        horizontalLineTo(20f)
+                        verticalLineTo(4f)
+                        horizontalLineTo(18f)
+                        verticalLineTo(7f)
+                        quadToRelative(0f, 1.52f, -0.71f, 2.86f)
+                        reflectiveQuadTo(15.3f, 12f)
+                        quadToRelative(1.27f, 0.8f, 1.99f, 2.14f)
+                        reflectiveQuadTo(18f, 17f)
+                        verticalLineToRelative(3f)
+                        horizontalLineToRelative(2f)
+                        verticalLineToRelative(2f)
+                        horizontalLineTo(4f)
+                        close()
+                        moveToRelative(8f, -2f)
+                        close()
+                        moveTo(12f, 4f)
+                        close()
+                    }
+                }
+                .build()
+        return _hourglass!!
+    }
+
+private var _hourglass: ImageVector? = null
