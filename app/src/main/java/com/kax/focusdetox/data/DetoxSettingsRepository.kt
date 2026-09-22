@@ -1,4 +1,4 @@
-package com.example.focusdetox.data
+package com.kax.focusdetox.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.*

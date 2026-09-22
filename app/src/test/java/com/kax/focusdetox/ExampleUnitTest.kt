@@ -1,4 +1,4 @@
-package com.example.focusdetox
+package com.kax.focusdetox
 
 import org.junit.Test
 

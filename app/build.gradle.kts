@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.focusdetox"
+    namespace = "com.kax.app"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.focusdetox"
+        applicationId = "com.kax.focusdetox"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
@@ -27,8 +27,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Allows installing release builds locally using debug keys
-            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {

@@ -1,4 +1,4 @@
-package com.example.focusdetox.screen
+package com.kax.focusdetox.screen
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -21,8 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
-import com.example.focusdetox.data.AppInfo
-import com.example.focusdetox.data.AppListProvider
+import com.kax.focusdetox.data.AppInfo
+import com.kax.focusdetox.data.AppListProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap

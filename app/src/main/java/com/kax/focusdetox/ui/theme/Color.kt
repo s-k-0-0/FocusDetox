@@ -1,4 +1,4 @@
-package com.example.focusdetox.ui.theme
+package com.kax.focusdetox.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

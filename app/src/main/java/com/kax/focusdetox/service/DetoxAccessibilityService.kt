@@ -1,13 +1,13 @@
-package com.example.focusdetox.service
+package com.kax.focusdetox.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
-import com.example.focusdetox.data.DetoxSettings
-import com.example.focusdetox.data.DetoxSettingsRepository
-import com.example.focusdetox.util.NotificationHelper
+import com.kax.focusdetox.data.DetoxSettings
+import com.kax.focusdetox.data.DetoxSettingsRepository
+import com.kax.focusdetox.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

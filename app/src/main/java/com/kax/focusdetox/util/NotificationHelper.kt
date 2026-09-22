@@ -1,4 +1,4 @@
-package com.example.focusdetox.util
+package com.kax.focusdetox.util
 
 import android.app.NotificationChannel
 import android.app.NotificationManager

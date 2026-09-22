@@ -1,4 +1,4 @@
-package com.example.focusdetox
+package com.kax.focusdetox
 
 import android.content.Context
 import android.content.Intent
@@ -36,20 +36,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.example.focusdetox.data.AppInfo
-import com.example.focusdetox.data.AppListProvider
-import com.example.focusdetox.data.DetoxSettings
-import com.example.focusdetox.data.DetoxSettingsRepository
-import com.example.focusdetox.service.DetoxAccessibilityService
-import com.example.focusdetox.screen.AppPickerBottomSheet
-import com.example.focusdetox.screen.AsyncAppIcon
-import com.example.focusdetox.ui.theme.WAHIcons
-import com.example.focusdetox.ui.theme.delete
-import com.example.focusdetox.ui.theme.hourglass
-import com.example.focusdetox.ui.theme.notifications_active
-import com.example.focusdetox.ui.theme.shield
-import com.example.focusdetox.ui.theme.shield_moon
-import com.example.focusdetox.ui.theme.timer
+import com.kax.focusdetox.data.AppInfo
+import com.kax.focusdetox.data.AppListProvider
+import com.kax.focusdetox.data.DetoxSettings
+import com.kax.focusdetox.data.DetoxSettingsRepository
+import com.kax.focusdetox.service.DetoxAccessibilityService
+import com.kax.focusdetox.screen.AppPickerBottomSheet
+import com.kax.focusdetox.screen.AsyncAppIcon
+import com.kax.focusdetox.ui.theme.WAHIcons
+import com.kax.focusdetox.ui.theme.delete
+import com.kax.focusdetox.ui.theme.hourglass
+import com.kax.focusdetox.ui.theme.notifications_active
+import com.kax.focusdetox.ui.theme.shield
+import com.kax.focusdetox.ui.theme.shield_moon
+import com.kax.focusdetox.ui.theme.timer
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
