@@ -1,5 +1,5 @@
 An app to help you avoid other addicting apps.
 
-Everything will be updated later on
+https://youtube.com/shorts/HwUR63qJvtc?feature=share
 
-Video, photos to be added soon
+The current video
