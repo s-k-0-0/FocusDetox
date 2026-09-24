@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.kax.app"
+    namespace = "com.kax.focusdetox"
     compileSdk {
         version = release(37)
     }

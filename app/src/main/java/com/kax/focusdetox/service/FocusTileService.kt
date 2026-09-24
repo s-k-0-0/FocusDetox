@@ -25,7 +25,7 @@ class FocusTileService : TileService() {
         }
 
         val launchAction = {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { // Android 14+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) { // Android 14+ or any android
                 val pendingIntent = PendingIntent.getActivity(
                     this,
                     0,

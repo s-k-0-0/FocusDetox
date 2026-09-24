@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class DetoxAccessibilityService : AccessibilityService() {
-
+//here accessibility service is used
     private lateinit var notificationHelper: NotificationHelper
     private lateinit var repository: DetoxSettingsRepository
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

@@ -92,5 +92,4 @@ class DetoxSettingsRepository(private val context: Context) {
     suspend fun removeTemporaryAppLock(packageName: String) {
         setTemporaryAppLock(packageName, 0)
     }
-
 }

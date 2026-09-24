@@ -168,6 +168,7 @@ fun AsyncAppIcon(packageName: String, modifier: Modifier = Modifier) {
                     iconBitmap = bitmap
                 } catch (_: Exception) {
                     // Fallback to placeholder UI on error
+
                 }
             }
         }
