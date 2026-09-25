@@ -11,7 +11,7 @@ FocusDetox is a practical mobile tool designed to help you regain control over y
     <td align="center" valign="top">
       <strong>Video Demo</strong><br><br>
       <a href="https://youtube.com/shorts/HwUR63qJvtc">
-        <img src="https://img.youtube.com/vi/HwUR63qJvtc/hqdefault.jpg" alt="FocusDetox Demo Video" width="220" />
+        <img src="https://img.youtube.com/vi/HwUR63qJvtc/hqdefault.jpg" alt="FocusDetox Demo Video" width="220" height = "400"/>
       </a>
     </td>
     <td align="center" valign="top">
