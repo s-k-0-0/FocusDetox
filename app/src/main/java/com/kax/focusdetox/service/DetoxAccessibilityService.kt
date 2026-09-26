@@ -44,10 +44,10 @@ class DetoxAccessibilityService : AccessibilityService() {
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val newPackage = event.packageName?.toString() ?: return
 
-            // Ignore system launcher, system UI, or Focus Detox's own screens
+            // ignore system launcher, system UI, or app own screens
             if (isIgnoredPackage(newPackage)) return
 
-            // Triggered only when the active app actually changes
+            // triggered only when the active app actually changes
             if (newPackage != currentForegroundPackage) {
                 currentForegroundPackage = newPackage
                 onAppSwitched(newPackage)
@@ -56,11 +56,11 @@ class DetoxAccessibilityService : AccessibilityService() {
     }
 
     private fun onAppSwitched(newPackage: String) {
-        // 1. CANCEL existing session timer as user left the previous app
+        // 1 cancel existing session timer as user left the previous app
         sessionTimerJob?.cancel()
         sessionTimerJob = null
 
-        // 2. Check if the newly opened app has a session timer/limit active
+        //Check if the newly opened app has a session timer/limit active
         if (isAppLimited(newPackage)) {
             val limitMillis = getSessionLimitForApp(newPackage) // e.g. 60,000ms for 1 min
             startSessionTimer(newPackage, limitMillis)
@@ -71,12 +71,12 @@ class DetoxAccessibilityService : AccessibilityService() {
         sessionTimerJob = serviceScope.launch {
             delay(limitMillis.milliseconds)
 
-            // CRITICAL CHECK: Verify user is STILL in this app when timer expires!
+            // verify user is STILL in this app when timer expires!
             if (currentForegroundPackage == packageName) {
-                // Show expired notification
+                // expired notification
                 showSessionExpiredNotification(packageName)
 
-                // Trigger block screen or send user to Home
+
                 blockAppAndGoHome(packageName)
             }
         }
@@ -90,7 +90,6 @@ class DetoxAccessibilityService : AccessibilityService() {
         }
         startActivity(homeIntent)
 
-        // TODO: Launch your Jetpack Compose Overlay / Block Screen Activity here if configured
     }
 
     private fun showSessionExpiredNotification(packageName: String) {
@@ -139,9 +138,9 @@ class DetoxAccessibilityService : AccessibilityService() {
         }
     }
 
-    // Helper stubs — replace with your DataStore / Repository checks
+
     private fun isAppLimited(packageName: String): Boolean = true
-    private fun getSessionLimitForApp(packageName: String): Long = 60_000L // 1 Minute
+    private fun getSessionLimitForApp(packageName: String): Long = 60_000L
 
     override fun onInterrupt() {}
 
