@@ -1,118 +1,152 @@
 package com.kax.focusdetox.service
 
 import android.accessibilityservice.AccessibilityService
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
+import androidx.core.app.NotificationCompat
+import com.kax.focusdetox.R
 import com.kax.focusdetox.data.DetoxSettings
 import com.kax.focusdetox.data.DetoxSettingsRepository
 import com.kax.focusdetox.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 class DetoxAccessibilityService : AccessibilityService() {
-//here accessibility service is used
-    private lateinit var notificationHelper: NotificationHelper
-    private lateinit var repository: DetoxSettingsRepository
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    @Volatile
-    private var activeSettings = DetoxSettings()
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var sessionTimerJob: Job? = null
+    private var currentForegroundPackage: String? = null
 
-    private val homeIntent by lazy {
-        Intent(Intent.ACTION_MAIN).apply {
+    companion object {
+        private const val CHANNEL_ID = "focus_detox_session_channel"
+        private const val NOTIFICATION_ID = 1001
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val newPackage = event.packageName?.toString() ?: return
+
+            // Ignore system launcher, system UI, or Focus Detox's own screens
+            if (isIgnoredPackage(newPackage)) return
+
+            // Triggered only when the active app actually changes
+            if (newPackage != currentForegroundPackage) {
+                currentForegroundPackage = newPackage
+                onAppSwitched(newPackage)
+            }
+        }
+    }
+
+    private fun onAppSwitched(newPackage: String) {
+        // 1. CANCEL existing session timer as user left the previous app
+        sessionTimerJob?.cancel()
+        sessionTimerJob = null
+
+        // 2. Check if the newly opened app has a session timer/limit active
+        if (isAppLimited(newPackage)) {
+            val limitMillis = getSessionLimitForApp(newPackage) // e.g. 60,000ms for 1 min
+            startSessionTimer(newPackage, limitMillis)
+        }
+    }
+
+    private fun startSessionTimer(packageName: String, limitMillis: Long) {
+        sessionTimerJob = serviceScope.launch {
+            delay(limitMillis.milliseconds)
+
+            // CRITICAL CHECK: Verify user is STILL in this app when timer expires!
+            if (currentForegroundPackage == packageName) {
+                // Show expired notification
+                showSessionExpiredNotification(packageName)
+
+                // Trigger block screen or send user to Home
+                blockAppAndGoHome(packageName)
+            }
+        }
+    }
+
+    private fun blockAppAndGoHome(packageName: String) {
+        // Redirect to Android Home Screen
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
-    }
-
-    private var currentActivePackage: String? = null
-    private var sessionStartTime = 0L
-    private val handler = Handler(Looper.getMainLooper())
-    private val sessionCheckRunnable = object : Runnable {
-        override fun run() {
-            checkActiveSession()
-            handler.postDelayed(this, 10000)
-        }
-    }
-
-    override fun onServiceConnected() {
-        super.onServiceConnected()
-        notificationHelper = NotificationHelper(this)
-        repository = DetoxSettingsRepository(this)
-
-        serviceScope.launch {
-            repository.settingsFlow.collectLatest { settings ->
-                activeSettings = settings
-            }
-        }
-
-        handler.postDelayed(sessionCheckRunnable, 10000)
-    }
-
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val eventType = event?.eventType ?: return
-        val packageName = event.packageName?.toString() ?: return
-
-        val currentTime = System.currentTimeMillis()
-        val lockUntil = activeSettings.appLockUntilMap[packageName] ?: 0L
-        val isTemporarilyLocked = currentTime < lockUntil
-        val isPermanentlyBlocked = activeSettings.blockedPackages.contains(packageName)
-
-        // Exit fast if app is neither permanently blocked nor temporarily locked
-        if (!isPermanentlyBlocked && !isTemporarilyLocked) return
-
-        if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            if (activeSettings.isAppLockEnabled) {
-                val reason = if (isTemporarilyLocked) {
-                    val remainingMins = ((lockUntil - currentTime) / 60000L) + 1
-                    "Detox timer active ($remainingMins mins left)"
-                } else {
-                    "App is locked"
-                }
-
-                triggerAppBlock(packageName, reason)
-                return
-            }
-
-            if (currentActivePackage != packageName) {
-                currentActivePackage = packageName
-                sessionStartTime = System.currentTimeMillis()
-            }
-        }
-    }
-
-    private fun checkActiveSession() {
-        val pkg = currentActivePackage ?: return
-        if (!activeSettings.isSessionTimerEnabled) return
-
-        val elapsedMinutes = (System.currentTimeMillis() - sessionStartTime) / 60000L
-        if (elapsedMinutes >= activeSettings.maxSessionMinutes) {
-            currentActivePackage = null
-            triggerAppBlock(pkg, "Session limit of ${activeSettings.maxSessionMinutes} mins reached")
-        }
-    }
-
-    private fun triggerAppBlock(packageName: String, reason: String) {
-        performGlobalAction(GLOBAL_ACTION_BACK) // Closes active PiP or popup overlays
         startActivity(homeIntent)
-        if (activeSettings.isNotificationEnabled) {
-            notificationHelper.sendBlockedNotification(packageName, reason)
+
+        // TODO: Launch your Jetpack Compose Overlay / Block Screen Activity here if configured
+    }
+
+    private fun showSessionExpiredNotification(packageName: String) {
+        val appName = getAppName(packageName)
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Session Time Up! ⏳")
+            .setContentText("Your time limit on $appName has ended. Great job staying focused!")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Session Expiry Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications sent when app session limits are reached."
+            }
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
-    override fun onInterrupt() {
-        currentActivePackage = null
+    private fun isIgnoredPackage(packageName: String): Boolean {
+        return packageName == this.packageName ||
+                packageName == "com.android.systemui" ||
+                packageName.contains("launcher")
     }
+
+    private fun getAppName(packageName: String): String {
+        return try {
+            val pm = packageManager
+            val info = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(info).toString()
+        } catch (e: Exception) {
+            packageName
+        }
+    }
+
+    // Helper stubs — replace with your DataStore / Repository checks
+    private fun isAppLimited(packageName: String): Boolean = true
+    private fun getSessionLimitForApp(packageName: String): Long = 60_000L // 1 Minute
+
+    override fun onInterrupt() {}
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacks(sessionCheckRunnable)
         serviceScope.cancel()
     }
 }
