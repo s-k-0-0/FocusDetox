@@ -30,12 +30,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity
-            android:name=".screen.BlockOverlayActivity"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTask"
-            android:taskAffinity=""
-            android:exported="false" />
         <!-- Accessibility Service Declaration -->
         <service
             android:name=".service.DetoxAccessibilityService"

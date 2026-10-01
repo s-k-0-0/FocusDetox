@@ -1,99 +1,57 @@
 package com.kax.focusdetox.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
+import androidx.compose.ui.platform.LocalContext
 
-// ─── Typography ───────────────────────────────────────────────────────────────
-// Add to build.gradle:  implementation("androidx.compose.ui:ui-text-google-fonts")
-// Then register Inter + Space Grotesk via GoogleFont provider.
-// For now, default typography is used — swap these for GoogleFont instances.
-
-private val White = Color(0xFFFFFFFF)
-
-private val LightColors = lightColorScheme(
-    primary          = Blue600,
-    onPrimary        = Blue50,
-    primaryContainer = Blue100,
-    onPrimaryContainer = Blue800,
-
-    secondary        = Blue400,
-    onSecondary      = Blue50,
-    secondaryContainer = Blue50,
-    onSecondaryContainer = Blue800,
-
-    background       = Slate50,
-    onBackground     = Slate900,
-
-    surface          = White,
-    onSurface        = Slate900,
-    surfaceVariant   = Blue50,
-    onSurfaceVariant = Slate700,
-
-    outline          = Slate200,
-    outlineVariant   = Blue100,
-
-    error            = Red,
-    onError          = RedLight,
+private val DarkColorScheme = darkColorScheme(
+    primary = Purple80,
+    secondary = PurpleGrey80,
+    tertiary = Pink80
 )
 
-private val DarkColors = darkColorScheme(
-    primary          = Blue200,
-    onPrimary        = Navy950,
-    primaryContainer = Blue800,
-    onPrimaryContainer = Blue100,
+private val LightColorScheme = lightColorScheme(
+    primary = Purple40,
+    secondary = PurpleGrey40,
+    tertiary = Pink40
 
-    secondary        = Blue200,
-    onSecondary      = Navy900,
-    secondaryContainer = Navy800,
-    onSecondaryContainer = Blue100,
-
-    background       = Navy950,
-    onBackground     = Blue50,
-
-    surface          = Navy900,
-    onSurface        = Blue50,
-    surfaceVariant   = Navy800,
-    onSurfaceVariant = Slate400,
-
-    outline          = Navy700,
-    outlineVariant   = Blue800,
-
-    error            = Red,
-    onError          = RedLight,
+    /* Other default colors to override
+    background = Color(0xFFFFFBFE),
+    surface = Color(0xFFFFFBFE),
+    onPrimary = Color.White,
+    onSecondary = Color.White,
+    onTertiary = Color.White,
+    onBackground = Color(0xFF1C1B1F),
+    onSurface = Color(0xFF1C1B1F),
+    */
 )
-
-
 
 @Composable
 fun FocusDetoxTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    // Dynamic color is available on Android 12+
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColors else LightColors
-
-    // Color the status bar to match background
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view)
-                .isAppearanceLightStatusBars = !darkTheme
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            val context = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
+
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = Typography,
         content = content
     )
 }

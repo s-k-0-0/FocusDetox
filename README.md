@@ -31,5 +31,5 @@ FocusDetox is a practical mobile tool designed to help you regain control over y
 * **App Blocking:** Set strict limits or immediate block rules for apps that pull your attention away.
 * **Usage Awareness:** Keep track of how often you open distracting apps throughout the day.
 * **Session Controls:** Start focused work blocks that automatically restrict non-essential apps until your timer ends.
-* **Lightweight Setup:** Designed to run efficiently in the background without draining your battery. Size = Minimal
+* **Lightweight Setup:** Designed to run efficiently in the background without draining your battery. Size = 2MB
 

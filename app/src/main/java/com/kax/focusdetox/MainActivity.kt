@@ -1,305 +1,539 @@
 package com.kax.focusdetox
 
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.TextUtils
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.*
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.kax.focusdetox.data.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.kax.focusdetox.data.AppInfo
+import com.kax.focusdetox.data.AppListProvider
+import com.kax.focusdetox.data.DetoxSettings
+import com.kax.focusdetox.data.DetoxSettingsRepository
 import com.kax.focusdetox.service.DetoxAccessibilityService
-import com.kax.focusdetox.screen.*
-import com.kax.focusdetox.ui.theme.FocusDetoxTheme
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  MainActivity
-// ─────────────────────────────────────────────────────────────────────────────
+import com.kax.focusdetox.screen.AppPickerBottomSheet
+import com.kax.focusdetox.screen.AsyncAppIcon
+import com.kax.focusdetox.ui.theme.WAHIcons
+import com.kax.focusdetox.ui.theme.delete
+import com.kax.focusdetox.ui.theme.hourglass
+import com.kax.focusdetox.ui.theme.notifications_active
+import com.kax.focusdetox.ui.theme.shield
+import com.kax.focusdetox.ui.theme.shield_moon
+import com.kax.focusdetox.ui.theme.timer
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
-
-    private val appRepo      by lazy { AppLimitRepository(applicationContext) }
-    private val settingsRepo by lazy { SettingsRepository(applicationContext) }
-
-    private val viewModel by lazy {
-        ViewModelProvider(this, HomeViewModelFactory(appRepo, settingsRepo))[HomeViewModel::class.java]
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
         setContent {
-            FocusDetoxTheme {
-                var accessibilityOk by remember { mutableStateOf(isAccessibilityEnabled()) }
-
-                // Poll every second — updates as soon as user grants the permission
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        accessibilityOk = isAccessibilityEnabled()
-                        delay(1_000)
-                    }
-                }
-
-                if (!accessibilityOk) {
-                    PermissionGateScreen(
-                        onOpenSettings = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-                    )
-                } else {
-                    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-                    MainScaffold(
-                        uiState      = uiState,
-                        appRepo      = appRepo,
-                        settingsRepo = settingsRepo,
-                        onStartSession = { viewModel.startFocusSession(it) },
-                        onStopSession  = { viewModel.stopFocusSession() },
-                    )
+            MaterialTheme(
+                colorScheme = darkColorScheme(
+                    primary = Color(0xFF81C784),
+                    primaryContainer = Color(0xFF1B382B),
+                    surface = Color(0xFF121413),
+                    surfaceContainerHigh = Color(0xFF1E211F)
+                )
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.surface
+                ) {
+                    DetoxControlCenter()
                 }
             }
         }
     }
-
-    private fun isAccessibilityEnabled(): Boolean {
-        val target  = "${packageName}/${DetoxAccessibilityService::class.java.canonicalName}"
-        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
-        return enabled.contains(target)
-    }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Scaffold + bottom nav
-// ─────────────────────────────────────────────────────────────────────────────
-
-private enum class NavTab(val label: String, val icon: ImageVector) {
-    Home("Home",     Icons.Outlined.Home),
-    Apps("Apps",     Icons.Default.Menu),
-    Stats("Stats",   Icons.Default.BarChart),
-    Settings("Settings", Icons.Outlined.Settings),
-}
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MainScaffold(
-    uiState: HomeUiState,
-    appRepo: AppLimitRepository,
-    settingsRepo: SettingsRepository,
-    onStartSession: (Long) -> Unit,
-    onStopSession: () -> Unit,
-) {
-    var selectedTab by remember { mutableStateOf(NavTab.Home) }
-    val colors = MaterialTheme.colorScheme
+fun DetoxControlCenter() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val repository = remember { DetoxSettingsRepository(context) }
+    val settingsState = repository.settingsFlow.collectAsState(initial = DetoxSettings())
+    val settings = settingsState.value
+
+    var isServiceEnabled by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
+    var showDisclosureDialog by remember { mutableStateOf(false) }
+    var showAppPickerSheet by remember { mutableStateOf(false) }
+    var selectedAppForTimer by remember { mutableStateOf<AppInfo?>(null) }
+
+    var allApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        allApps = AppListProvider.getInstalledLauncherApps(context)
+    }
+
+    // Merge permanently blocked apps and temporarily timed apps
+    val protectedAppInfos by remember(settings.blockedPackages, settings.appLockUntilMap, allApps) {
+        derivedStateOf {
+            val allPackages = settings.blockedPackages + settings.appLockUntilMap.keys
+            allApps.filter { allPackages.contains(it.packageName) }
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = {}
+    )
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isServiceEnabled = isAccessibilityServiceEnabled(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = colors.surface,
-                tonalElevation = 0.dp,
-            ) {
-                NavTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = selectedTab == tab,
-                        onClick  = { selectedTab = tab },
-                        icon     = { Icon(tab.icon, contentDescription = tab.label) },
-                        label    = { Text(tab.label, fontSize = 11.sp) },
-                        colors   = NavigationBarItemDefaults.colors(
-                            selectedIconColor   = colors.primary,
-                            selectedTextColor   = colors.primary,
-                            indicatorColor      = colors.primaryContainer,
-                            unselectedIconColor = colors.onSurfaceVariant,
-                            unselectedTextColor = colors.onSurfaceVariant,
-                        ),
-                    )
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Focus Detox", fontWeight = FontWeight.Bold, fontSize = 22.sp) }
+            )
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isServiceEnabled)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.errorContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(20.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(if (isServiceEnabled) Color(0xFF2E7D32) else Color(0xFFC62828)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isServiceEnabled) WAHIcons.shield else WAHIcons.shield_moon,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isServiceEnabled) "Detox Active" else "Protection Off",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (isServiceEnabled) "Monitoring target apps" else "Enable permission to start",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                if (!isServiceEnabled) showDisclosureDialog = true
+                                else context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(if (isServiceEnabled) "Manage" else "Turn On")
+                        }
+                    }
                 }
             }
-        },
-        containerColor = colors.background,
-    ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            when (selectedTab) {
-                NavTab.Home  -> HomeScreen(
-                    uiState             = uiState,
-                    onStartFocusSession = onStartSession,
-                    onStopFocusSession  = onStopSession,
-                    onOpenAppLimits     = { selectedTab = NavTab.Apps },
-                    onOpenStats         = { selectedTab = NavTab.Stats },
+
+            item {
+                Text(
+                    text = "Blocking Rules",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
-                NavTab.Apps     -> AppPickerScreen(repository = appRepo)
-                NavTab.Stats    -> StatsScreen(repository = appRepo, settingsRepo = settingsRepo)
-                NavTab.Settings -> SettingsScreen(settingsRepo = settingsRepo)
             }
+
+            item {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        ModernToggleRow(
+                            icon = Icons.Rounded.Lock,
+                            title = "Instant App Lock",
+                            subtitle = "Block selected apps as soon as opened",
+                            checked = settings.isAppLockEnabled,
+                            onCheckedChange = { scope.launch { repository.updateAppLockEnabled(it) } }
+                        )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        )
+
+                        ModernToggleRow(
+                            icon = WAHIcons.timer,
+                            title = "Session Time Limit",
+                            subtitle = "Lock apps after continuous usage time",
+                            checked = settings.isSessionTimerEnabled,
+                            onCheckedChange = { scope.launch { repository.updateSessionTimerEnabled(it) } }
+                        )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        )
+
+                        ModernToggleRow(
+                            icon = WAHIcons.notifications_active,
+                            title = "Alert Notifications",
+                            subtitle = "Notify when session time or app lockout triggers",
+                            checked = settings.isNotificationEnabled,
+                            onCheckedChange = { scope.launch { repository.updateNotificationEnabled(it) } }
+                        )
+                    }
+                }
+            }
+
+            item {
+                AnimatedVisibility(
+                    visible = settings.isSessionTimerEnabled,
+                    enter = fadeIn() + expandVertically(spring(stiffness = Spring.StiffnessMediumLow)),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Session Time Limit", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "Allowed continuous usage: ${settings.maxSessionMinutes} minutes",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            var sliderPosition by remember(settings.maxSessionMinutes) {
+                                mutableStateOf(settings.maxSessionMinutes.toFloat())
+                            }
+
+                            Slider(
+                                value = sliderPosition,
+                                onValueChange = { sliderPosition = it },
+                                onValueChangeFinished = {
+                                    scope.launch { repository.updateMaxSessionMinutes(sliderPosition.roundToInt()) }
+                                },
+                                valueRange = 1f..60f,
+                                steps = 58
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Protected Apps", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = { showAppPickerSheet = true }) {
+                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Manage Apps")
+                    }
+                }
+            }
+
+            if (protectedAppInfos.isEmpty()) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "No apps selected yet. Tap 'Manage Apps' to pick Instagram, YouTube, or TikTok.",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(20.dp)
+                        )
+                    }
+                }
+            } else {
+                items(protectedAppInfos, key = { it.packageName }) { app ->
+                    val lockUntil = settings.appLockUntilMap[app.packageName] ?: 0L
+                    val currentTime = System.currentTimeMillis()
+                    val isTemporarilyLocked = currentTime < lockUntil
+
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                AsyncAppIcon(
+                                    packageName = app.packageName,
+                                    modifier = Modifier.size(36.dp)
+                                )
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = app.name,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+
+                                    if (isTemporarilyLocked) {
+                                        val remainingMins = ((lockUntil - currentTime) / 60000L) + 1
+                                        val hours = remainingMins / 60
+                                        val mins = remainingMins % 60
+                                        val timeStr = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
+
+                                        Text(
+                                            text = "Paused for $timeStr remaining",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+
+                                IconButton(onClick = { selectedAppForTimer = app }) {
+                                    Icon(
+                                        imageVector = WAHIcons.hourglass,
+                                        contentDescription = "Set Timer",
+                                        tint = if (isTemporarilyLocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            repository.togglePackageBlocked(app.packageName, false)
+                                            repository.removeTemporaryAppLock(app.packageName)
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        WAHIcons.delete,
+                                        contentDescription = "Remove",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(24.dp)) }
         }
     }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Permission gate screen
-// ─────────────────────────────────────────────────────────────────────────────
+    // Detox Timer Duration Selection Dialog
+    selectedAppForTimer?.let { app ->
+        AlertDialog(
+            onDismissRequest = { selectedAppForTimer = null },
+            title = { Text("Pause ${app.name}", fontWeight = FontWeight.Bold) },
+            text = { Text("Select how long you want to lock yourself out of ${app.name}:") },
+            confirmButton = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val durations = listOf(
+                        "30 Minutes" to 30,
+                        "1 Hour" to 60,
+                        "2 Hours" to 120,
+                        "4 Hours" to 240,
+                        "8 Hours" to 480
+                    )
+
+                    durations.forEach { (label, minutes) ->
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    repository.setTemporaryAppLock(app.packageName, minutes)
+                                    selectedAppForTimer = null
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Lock for $label")
+                        }
+                    }
+
+                    if (settings.appLockUntilMap.containsKey(app.packageName)) {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    repository.removeTemporaryAppLock(app.packageName)
+                                    selectedAppForTimer = null
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Cancel Active Timer", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedAppForTimer = null }) { Text("Close") }
+            }
+        )
+    }
+
+    if (showAppPickerSheet) {
+        AppPickerBottomSheet(
+            blockedPackages = settings.blockedPackages,
+            onToggleApp = { pkg, isBlocked ->
+                scope.launch { repository.togglePackageBlocked(pkg, isBlocked) }
+            },
+            onDismiss = { showAppPickerSheet = false }
+        )
+    }
+
+    if (showDisclosureDialog) {
+        AlertDialog(
+            onDismissRequest = { showDisclosureDialog = false },
+            title = { Text("Focus Protection Required", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "FocusDetox uses Accessibility Services to detect when " +
+                            "your target apps are open or usage time limits are exceeded.\n\n" +
+                            "• Redirects you to Home when limits are reached.\n" +
+                            "• Zero personal data is recorded or shared."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDisclosureDialog = false
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    }
+                ) {
+                    Text("Agree & Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisclosureDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+}
 
 @Composable
-private fun PermissionGateScreen(onOpenSettings: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+private fun ModernToggleRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            Icons.Outlined.AccessibilityNew,
+            imageVector = icon,
             contentDescription = null,
-            tint = colors.primary,
-            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
         )
-        Spacer(Modifier.height(24.dp))
-        Text(
-            "One permission needed",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.onBackground,
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "FocusDetox needs the Accessibility permission to detect which app is open " +
-                    "and enforce your time limits. No personal data is read — only the package name of the active app.",
-            fontSize = 14.sp,
-            color = colors.onSurfaceVariant,
-            lineHeight = 22.sp,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(32.dp))
-        Button(
-            onClick = onOpenSettings,
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-        ) {
-            Text("Open Accessibility Settings", fontWeight = FontWeight.SemiBold)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "Tap FocusDetox in the list, then toggle it on.",
-            fontSize = 12.sp,
-            color = colors.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  HomeViewModel  — fully wired, no placeholders
-// ─────────────────────────────────────────────────────────────────────────────
+private fun isAccessibilityServiceEnabled(context: Context): Boolean {
+    val expectedService = "${context.packageName}/${DetoxAccessibilityService::class.java.canonicalName}"
+    val enabledServices = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+    ) ?: return false
 
-class HomeViewModel(
-    private val appRepo: AppLimitRepository,
-    private val settingsRepo: SettingsRepository,
-) : ViewModel() {
+    val splitter = TextUtils.SimpleStringSplitter(':')
+    splitter.setString(enabledServices)
 
-    private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-
-    private var activeFocusSessionId = -1L
-    private var sessionJob: Job? = null
-
-    init {
-        loadData()
-        // Refresh every 60 s so usage numbers stay live
-        viewModelScope.launch {
-            while (true) {
-                delay(60_000)
-                loadData()
-            }
-        }
+    while (splitter.hasNext()) {
+        if (splitter.next().equals(expectedService, ignoreCase = true)) return true
     }
-
-    private fun loadData() {
-        viewModelScope.launch {
-            val limits = appRepo.getEnabledLimitsList()
-
-            // Fetch today's usage for every limited app
-            val stats = limits.map { limit ->
-                AppUsageStat(
-                    appName     = limit.appName,
-                    packageName = limit.packageName,
-                    usedMs      = appRepo.getTodayUsageMs(limit.packageName),
-                    limitMs     = limit.dailyLimitMs,
-                )
-            }
-
-            val goals      = appRepo.getActiveGoalsList()
-            val maxStreak  = goals.maxOfOrNull { it.streakDays } ?: 0
-            val totalUsed  = stats.sumOf { it.usedMs }
-            val totalLimit = stats.sumOf { it.limitMs }.coerceAtLeast(1L)
-            val score      = settingsRepo.getFocusScore()
-
-            _uiState.update { current ->
-                current.copy(
-                    focusScore           = score,
-                    dailyBudgetUsedMs    = totalUsed,
-                    dailyBudgetTotalMs   = totalLimit,
-                    streakDays           = maxStreak,
-                    appStats             = stats,
-                )
-            }
-        }
-    }
-
-    fun startFocusSession(durationMs: Long) {
-        sessionJob?.cancel()
-        sessionJob = viewModelScope.launch {
-            activeFocusSessionId = appRepo.startFocusSession(durationMs)
-            _uiState.update { it.copy(isFocusSessionActive = true, focusSessionRemainingMs = durationMs) }
-
-            val endTime = System.currentTimeMillis() + durationMs
-            while (isActive) {
-                val remaining = endTime - System.currentTimeMillis()
-                if (remaining <= 0) break
-                _uiState.update { it.copy(focusSessionRemainingMs = remaining) }
-                delay(1_000)
-            }
-
-            // Completed naturally
-            if (_uiState.value.isFocusSessionActive) {
-                appRepo.endFocusSession(activeFocusSessionId, completed = true)
-                _uiState.update { it.copy(isFocusSessionActive = false, focusSessionRemainingMs = 0L) }
-                settingsRepo.addFocusScore(50) // bonus for completing a session
-                loadData() // refresh score on home screen
-            }
-        }
-    }
-
-    fun stopFocusSession() {
-        sessionJob?.cancel()
-        viewModelScope.launch {
-            if (activeFocusSessionId != -1L) {
-                appRepo.endFocusSession(activeFocusSessionId, completed = false)
-            }
-            _uiState.update { it.copy(isFocusSessionActive = false, focusSessionRemainingMs = 0L) }
-        }
-    }
-}
-
-class HomeViewModelFactory(
-    private val appRepo: AppLimitRepository,
-    private val settingsRepo: SettingsRepository,
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        HomeViewModel(appRepo, settingsRepo) as T
+    return false
 }
