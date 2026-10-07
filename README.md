@@ -1,3 +1,5 @@
+#NOTE : Currently under internal testing on playstore. Not going to update here for a few days
+
 # FocusDetox
 
 FocusDetox is a practical mobile tool designed to help you regain control over your phone usage. Instead of relying purely on willpower, the app actively interrupts mindless scrolling habits and limits access to addictive applications so you can stay focused on what actually matters.
