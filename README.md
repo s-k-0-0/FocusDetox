@@ -1,4 +1,5 @@
-#NOTE : Currently under internal testing on playstore. Not going to update here for a few days
+# NOTE
+Currently under internal testing on playstore. Not going to update here for a few days
 
 # FocusDetox
 
